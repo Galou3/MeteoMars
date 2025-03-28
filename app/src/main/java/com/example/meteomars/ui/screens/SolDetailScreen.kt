@@ -1,5 +1,6 @@
 package com.example.meteomars.ui.screens
 
+import android.view.MotionEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
@@ -27,11 +28,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,9 +52,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import android.widget.Toast
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun SolDetailScreen(
     marsWeatherData: MarsWeatherData,
@@ -54,45 +65,39 @@ fun SolDetailScreen(
     onPreviousSol: (MarsWeatherData) -> Unit = {},
     allWeatherData: List<MarsWeatherData> = emptyList()
 ) {
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
+    
+    // Debug vars to show scroll values
+    var lastScrollValue by remember { mutableStateOf(0) }
+    var lastWheelValue by remember { mutableStateOf(0f) }
     
     // Find current sol index in the list
     val currentSolIndex = allWeatherData.indexOfFirst { it.sol == marsWeatherData.sol }
     val hasPreviousSol = currentSolIndex > 0
     val hasNextSol = currentSolIndex < allWeatherData.size - 1 && currentSolIndex >= 0
+    
+    // Track when reaching scroll boundaries
+    var atStart by remember { mutableStateOf(true) }
+    var atEnd by remember { mutableStateOf(false) }
+    
+    // Monitor scroll position
+    LaunchedEffect(scrollState.value) {
+        lastScrollValue = scrollState.value
+        atStart = scrollState.value <= 5
+        atEnd = scrollState.value >= scrollState.maxValue - 5
+    }
+    
+    // Reset scroll position when changing sols
+    LaunchedEffect(marsWeatherData.sol) {
+        scrollState.scrollTo(0)
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(DarkBackground)
-            .pointerInput(Unit) {
-                detectVerticalDragGestures(
-                    onDragEnd = { 
-                        // Determine if it was a significant drag
-                        if (scrollState.value == 0 || scrollState.value == scrollState.maxValue) {
-                            // We're at the top or bottom of scroll, so handle navigation
-                        }
-                    },
-                    onDragStart = { },
-                    onVerticalDrag = { change, dragAmount ->
-                        // Handle scrolling during drag
-                        coroutineScope.launch {
-                            if (dragAmount < -50 && scrollState.value == scrollState.maxValue && hasNextSol) {
-                                // Scrolled up at bottom of content, go to next sol
-                                if (currentSolIndex >= 0 && currentSolIndex < allWeatherData.size - 1) {
-                                    onNextSol(allWeatherData[currentSolIndex + 1])
-                                }
-                            } else if (dragAmount > 50 && scrollState.value == 0 && hasPreviousSol) {
-                                // Scrolled down at top of content, go to previous sol
-                                if (currentSolIndex > 0) {
-                                    onPreviousSol(allWeatherData[currentSolIndex - 1])
-                                }
-                            }
-                        }
-                    }
-                )
-            }
     ) {
         Column(
             modifier = Modifier.fillMaxSize()
@@ -158,60 +163,109 @@ fun SolDetailScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Glissez vers le haut/bas pour naviguer entre les sols",
+                    text = "Utilisez la molette pour naviguer entre les sols",
                     color = Color.White,
                     fontSize = 12.sp
                 )
             }
             
-            Column(
+            // Main content with mouse wheel interceptor
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 16.dp)
-                    .verticalScroll(scrollState),
-                horizontalAlignment = Alignment.Start
+                    .pointerInteropFilter { event ->
+                        if (event.action == MotionEvent.ACTION_SCROLL) {
+                            val scrollY = event.getAxisValue(MotionEvent.AXIS_VSCROLL)
+                            lastWheelValue = scrollY
+                            
+                            // Sur un émulateur, les valeurs peuvent être inversées par rapport
+                            // à un appareil physique ou PC
+                            
+                            // scrollY > 0 = scroll vers le haut (précédent)
+                            if (atStart && scrollY > 0 && hasPreviousSol) {
+                                coroutineScope.launch {
+                                    onPreviousSol(allWeatherData[currentSolIndex - 1])
+                                }
+                                return@pointerInteropFilter true
+                            }
+                            
+                            // scrollY < 0 = scroll vers le bas (suivant)
+                            if (atEnd && scrollY < 0 && hasNextSol) {
+                                coroutineScope.launch {
+                                    onNextSol(allWeatherData[currentSolIndex + 1])
+                                }
+                                return@pointerInteropFilter true
+                            }
+                        }
+                        false
+                    }
             ) {
-                // Concise Temperature display
-                Text(
-                    text = "Température : avg: ${formatTemperature(marsWeatherData.temperature)} min: ${formatTemperature(marsWeatherData.minTemperature)} max: ${formatTemperature(marsWeatherData.maxTemperature)}",
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
-                
-                // Concise Pressure display
-                Text(
-                    text = "Pression : avg: ${formatPressure(marsWeatherData.pressure)} min: ${formatPressureMinMax(marsWeatherData.pressure * 0.95)} max: ${formatPressureMinMax(marsWeatherData.pressure * 1.05)}",
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                // Wind Rose Chart
-                if (marsWeatherData.windDirectionMap.isNotEmpty()) {
-                    WindRoseChart(
-                        windDirectionMap = marsWeatherData.windDirectionMap,
-                        maxValue = marsWeatherData.maxWindDirectionValue,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(350.dp),
-                        circleColor = Color(0xFFD8D0CE), // Light beige/gray color as in the image
-                        triangleColor = Color(0xFF82B3D6) // Light blue similar to the image
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp)
+                        .verticalScroll(scrollState),
+                    horizontalAlignment = Alignment.Start
+                ) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    // Concise Temperature display
+                    Text(
+                        text = "Température : avg: ${formatTemperature(marsWeatherData.temperature)} min: ${formatTemperature(marsWeatherData.minTemperature)} max: ${formatTemperature(marsWeatherData.maxTemperature)}",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(vertical = 4.dp)
                     )
-                } else {
-                    // Generate sample data for the wind rose chart for demo purposes
-                    val sampleWindData = generateSampleWindData()
-                    WindRoseChart(
-                        windDirectionMap = sampleWindData.first,
-                        maxValue = sampleWindData.second,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(350.dp),
-                        circleColor = Color(0xFFD8D0CE), // Light beige/gray color as in the image
-                        triangleColor = Color(0xFF82B3D6) // Light blue similar to the image
+                    
+                    // Concise Pressure display
+                    Text(
+                        text = "Pression : avg: ${formatPressure(marsWeatherData.pressure)} min: ${formatPressureMinMax(marsWeatherData.pressure * 0.95)} max: ${formatPressureMinMax(marsWeatherData.pressure * 1.05)}",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(vertical = 4.dp)
                     )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Wind Rose Chart
+                    if (marsWeatherData.windDirectionMap.isNotEmpty()) {
+                        WindRoseChart(
+                            windDirectionMap = marsWeatherData.windDirectionMap,
+                            maxValue = marsWeatherData.maxWindDirectionValue,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(350.dp),
+                            circleColor = Color(0xFFD8D0CE),
+                            triangleColor = Color(0xFF82B3D6)
+                        )
+                    } else {
+                        // Generate sample data for the wind rose chart for demo purposes
+                        val sampleWindData = generateSampleWindData()
+                        WindRoseChart(
+                            windDirectionMap = sampleWindData.first,
+                            maxValue = sampleWindData.second,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(350.dp),
+                            circleColor = Color(0xFFD8D0CE),
+                            triangleColor = Color(0xFF82B3D6)
+                        )
+                    }
+                    
+                    // Indicateurs de navigation en bas pour rappeler qu'on peut scroller
+                    if (hasNextSol && atEnd) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "⬇️ Sol suivant disponible (scroll vers le bas)",
+                            color = Color.Yellow,
+                            fontSize = 12.sp,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                    
+                    // Extra space to ensure we can scroll fully
+                    Spacer(modifier = Modifier.height(60.dp))
                 }
             }
         }
@@ -249,53 +303,10 @@ private fun generateSampleWindData(): Pair<Map<Int, Double>, Double> {
     return Pair(windMap, maxValue)
 }
 
-@Composable
-fun DetailCard(title: String, content: String) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF2A2A2A)
-        )
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = title,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-            
-            Divider(
-                color = Color.Gray,
-                thickness = 1.dp,
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
-            
-            Text(
-                text = content,
-                fontSize = 16.sp,
-                color = Color.White,
-                lineHeight = 24.sp
-            )
-        }
-    }
-}
-
 // Helper functions to format data
 private fun formatTemperature(value: Double?): String {
     return if (value != null) {
         String.format("%.2f", value)
-    } else {
-        "N/A"
-    }
-}
-
-private fun formatWindSpeed(value: Double?): String {
-    return if (value != null) {
-        String.format("%.1f m/s", value)
     } else {
         "N/A"
     }
@@ -331,4 +342,4 @@ private fun formatDate(dateStr: String?): String {
     } catch (e: Exception) {
         return dateStr // Return original string if parsing fails
     }
-} 
+}

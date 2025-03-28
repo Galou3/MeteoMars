@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +52,7 @@ import com.example.meteomars.ui.theme.DarkBackground
 import com.example.meteomars.ui.theme.MeteoMarsTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -75,6 +78,40 @@ fun RobotControlScreen(onBackClick: () -> Unit) {
     var motorsStarted by remember { mutableStateOf(false) }
     var lastResponse by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    
+    // Pour les tests - simuler une connexion réussie au serveur
+    var isSimulationMode by remember { mutableStateOf(false) }
+    var commandHistory by remember { mutableStateOf<List<String>>(emptyList()) }
+    
+    // Vérifier la connexion au démarrage
+    LaunchedEffect(Unit) {
+        isLoading = true
+        delay(1000) // Simulation d'un délai de connexion
+        
+        try {
+            // Essayer de se connecter au serveur
+            testConnection(context, 
+                onSuccess = {
+                    isLoading = false
+                    lastResponse = "Connexion au serveur réussie"
+                    isSimulationMode = false
+                },
+                onError = { error ->
+                    isLoading = false
+                    errorMessage = error
+                    // Mode simulation si la connexion échoue
+                    isSimulationMode = true
+                    lastResponse = "Mode simulation activé (pas de connexion au serveur)"
+                }
+            )
+        } catch (e: Exception) {
+            isLoading = false
+            errorMessage = e.message
+            isSimulationMode = true
+            lastResponse = "Mode simulation activé (erreur: ${e.message})"
+        }
+    }
     
     Box(
         modifier = Modifier
@@ -113,6 +150,23 @@ fun RobotControlScreen(onBackClick: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Indicateur de mode simulation si actif
+                if (isSimulationMode) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF5D4037), shape = CircleShape)
+                            .padding(8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Mode simulation (sans serveur)",
+                            color = Color.White,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+                
                 // Status indicator
                 Box(
                     modifier = Modifier
@@ -122,12 +176,19 @@ fun RobotControlScreen(onBackClick: () -> Unit) {
                         .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = if (motorsStarted) "Moteurs: En marche" else "Moteurs: À l'arrêt",
-                        color = if (motorsStarted) Color.Green else Color.Red,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    )
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            color = Color.White, 
+                            modifier = Modifier.size(24.dp)
+                        )
+                    } else {
+                        Text(
+                            text = if (motorsStarted) "Moteurs: En marche" else "Moteurs: À l'arrêt",
+                            color = if (motorsStarted) Color.Green else Color.Red,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+                    }
                 }
                 
                 // Motor control buttons
@@ -138,12 +199,26 @@ fun RobotControlScreen(onBackClick: () -> Unit) {
                     // Start Motor button
                     Button(
                         onClick = {
-                            if (!motorsStarted) {
+                            isLoading = true
+                            if (isSimulationMode) {
+                                // Simulation locale
+                                CoroutineScope(Dispatchers.Main).launch {
+                                    delay(500) // Simuler un délai de réseau
+                                    lastResponse = "SUCCESS: Moteurs démarrés"
+                                    commandHistory = commandHistory + "START"
+                                    motorsStarted = true
+                                    isLoading = false
+                                }
+                            } else {
+                                // Envoyer la commande réelle
                                 sendCommand("START", context) { response ->
                                     lastResponse = response
-                                    if (response.contains("SUCCESS")) {
+                                    // Considérer toute réponse qui ne contient pas "ERREUR" comme un succès
+                                    if (!response.contains("ERREUR", ignoreCase = true) && 
+                                        !response.contains("ERROR", ignoreCase = true)) {
                                         motorsStarted = true
                                     }
+                                    isLoading = false
                                 }
                             }
                         },
@@ -166,12 +241,26 @@ fun RobotControlScreen(onBackClick: () -> Unit) {
                     // Stop Motor button
                     Button(
                         onClick = {
-                            if (motorsStarted) {
+                            isLoading = true
+                            if (isSimulationMode) {
+                                // Simulation locale
+                                CoroutineScope(Dispatchers.Main).launch {
+                                    delay(500) // Simuler un délai de réseau
+                                    lastResponse = "SUCCESS: Moteurs arrêtés"
+                                    commandHistory = commandHistory + "STOP"
+                                    motorsStarted = false
+                                    isLoading = false
+                                }
+                            } else {
+                                // Envoyer la commande réelle
                                 sendCommand("STOP", context) { response ->
                                     lastResponse = response
-                                    if (response.contains("SUCCESS")) {
+                                    // Considérer toute réponse qui ne contient pas "ERREUR" comme un succès
+                                    if (!response.contains("ERREUR", ignoreCase = true) && 
+                                        !response.contains("ERROR", ignoreCase = true)) {
                                         motorsStarted = false
                                     }
+                                    isLoading = false
                                 }
                             }
                         },
@@ -208,8 +297,22 @@ fun RobotControlScreen(onBackClick: () -> Unit) {
                     Button(
                         onClick = {
                             if (motorsStarted) {
-                                sendCommand("DIRECT_FRONT", context) { response ->
-                                    lastResponse = response
+                                isLoading = true
+                                if (isSimulationMode) {
+                                    // Simulation locale
+                                    CoroutineScope(Dispatchers.Main).launch {
+                                        delay(500) // Simuler un délai de réseau
+                                        lastResponse = "SUCCESS: Avance tout droit"
+                                        commandHistory = commandHistory + "DIRECT_FRONT"
+                                        isLoading = false
+                                    }
+                                } else {
+                                    sendCommand("DIRECT_FRONT", context) { response ->
+                                        lastResponse = response
+                                        // Déboguer la réponse pour voir ce qui est reçu
+                                        Toast.makeText(context, "Réponse: $response", Toast.LENGTH_SHORT).show()
+                                        isLoading = false
+                                    }
                                 }
                             } else {
                                 Toast.makeText(context, "Les moteurs doivent être démarrés", Toast.LENGTH_SHORT).show()
@@ -237,8 +340,22 @@ fun RobotControlScreen(onBackClick: () -> Unit) {
                         Button(
                             onClick = {
                                 if (motorsStarted) {
-                                    sendCommand("DIRECT_LEFT", context) { response ->
-                                        lastResponse = response
+                                    isLoading = true
+                                    if (isSimulationMode) {
+                                        // Simulation locale
+                                        CoroutineScope(Dispatchers.Main).launch {
+                                            delay(500) // Simuler un délai de réseau
+                                            lastResponse = "SUCCESS: Tourne à gauche"
+                                            commandHistory = commandHistory + "DIRECT_LEFT"
+                                            isLoading = false
+                                        }
+                                    } else {
+                                        sendCommand("DIRECT_LEFT", context) { response ->
+                                            lastResponse = response
+                                            // Déboguer la réponse pour voir ce qui est reçu
+                                            Toast.makeText(context, "Réponse: $response", Toast.LENGTH_SHORT).show()
+                                            isLoading = false
+                                        }
                                     }
                                 } else {
                                     Toast.makeText(context, "Les moteurs doivent être démarrés", Toast.LENGTH_SHORT).show()
@@ -262,8 +379,22 @@ fun RobotControlScreen(onBackClick: () -> Unit) {
                         Button(
                             onClick = {
                                 if (motorsStarted) {
-                                    sendCommand("DIRECT_RIGHT", context) { response ->
-                                        lastResponse = response
+                                    isLoading = true
+                                    if (isSimulationMode) {
+                                        // Simulation locale
+                                        CoroutineScope(Dispatchers.Main).launch {
+                                            delay(500) // Simuler un délai de réseau
+                                            lastResponse = "SUCCESS: Tourne à droite"
+                                            commandHistory = commandHistory + "DIRECT_RIGHT"
+                                            isLoading = false
+                                        }
+                                    } else {
+                                        sendCommand("DIRECT_RIGHT", context) { response ->
+                                            lastResponse = response
+                                            // Déboguer la réponse pour voir ce qui est reçu  
+                                            Toast.makeText(context, "Réponse: $response", Toast.LENGTH_SHORT).show()
+                                            isLoading = false
+                                        }
                                     }
                                 } else {
                                     Toast.makeText(context, "Les moteurs doivent être démarrés", Toast.LENGTH_SHORT).show()
@@ -305,14 +436,71 @@ fun RobotControlScreen(onBackClick: () -> Unit) {
                 }
             }
         }
+        
+        // Indicateur de chargement global
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                CircularProgressIndicator(
+                    color = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+    }
+}
+
+private fun testConnection(
+    context: android.content.Context,
+    onSuccess: () -> Unit,
+    onError: (String) -> Unit
+) {
+    // Adresse spéciale qui pointe vers le localhost de la machine hôte depuis l'émulateur
+    val serverIp = "10.0.2.2"
+    val serverPort = 1056
+    
+    CoroutineScope(Dispatchers.IO).launch {
+        try {
+            // Tenter de créer une connexion
+            val socket = Socket(serverIp, serverPort)
+            
+            // Si la connexion réussit, on ferme la socket
+            socket.close()
+            
+            // Notifier du succès sur le thread principal
+            CoroutineScope(Dispatchers.Main).launch {
+                Toast.makeText(context, "Connexion réussie à $serverIp:$serverPort", Toast.LENGTH_SHORT).show()
+                onSuccess()
+            }
+        } catch (e: Exception) {
+            // Essayer avec une autre adresse IP
+            try {
+                val alternativeIp = "127.0.0.1"
+                val socket = Socket(alternativeIp, serverPort)
+                socket.close()
+                
+                CoroutineScope(Dispatchers.Main).launch {
+                    Toast.makeText(context, "Connexion réussie à $alternativeIp:$serverPort", Toast.LENGTH_SHORT).show()
+                    onSuccess()
+                }
+            } catch (e2: Exception) {
+                // Notifier de l'erreur sur le thread principal
+                CoroutineScope(Dispatchers.Main).launch {
+                    onError("Erreur de connexion: impossible de se connecter au serveur")
+                }
+            }
+        }
     }
 }
 
 private fun sendCommand(command: String, context: android.content.Context, callback: (String) -> Unit) {
-    // For demonstration, we'll use a fixed IP and port
-    // In a real app, these would come from settings or configuration
-    val serverIp = "10.0.2.2" // Default emulator loopback address
-    val serverPort = 8080
+    // Adresse spéciale qui pointe vers le localhost de la machine hôte depuis l'émulateur
+    val serverIp = "10.0.2.2" 
+    val serverPort = 1056
     
     CoroutineScope(Dispatchers.IO).launch {
         try {
@@ -334,9 +522,26 @@ private fun sendCommand(command: String, context: android.content.Context, callb
             // Close the socket
             socket.close()
         } catch (e: Exception) {
-            CoroutineScope(Dispatchers.Main).launch {
-                Toast.makeText(context, "Erreur: ${e.message}", Toast.LENGTH_LONG).show()
-                callback("Erreur: ${e.message}")
+            // Essayer avec une autre adresse IP
+            try {
+                val alternativeIp = "127.0.0.1"
+                val socket = Socket(alternativeIp, serverPort)
+                val output = PrintWriter(socket.getOutputStream(), true)
+                val input = BufferedReader(InputStreamReader(socket.getInputStream()))
+                
+                output.println(command)
+                val response = input.readLine() ?: "No response"
+                
+                CoroutineScope(Dispatchers.Main).launch {
+                    callback(response)
+                }
+                
+                socket.close()
+            } catch (e2: Exception) {
+                CoroutineScope(Dispatchers.Main).launch {
+                    Toast.makeText(context, "Erreur: impossible de se connecter au serveur", Toast.LENGTH_LONG).show()
+                    callback("Erreur: impossible de se connecter au serveur")
+                }
             }
         }
     }
