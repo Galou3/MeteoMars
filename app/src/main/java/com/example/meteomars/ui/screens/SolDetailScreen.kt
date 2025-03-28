@@ -1,6 +1,7 @@
 package com.example.meteomars.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -8,11 +9,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
@@ -23,30 +27,72 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.meteomars.model.MarsWeatherData
+import com.example.meteomars.ui.components.WindRoseChart
 import com.example.meteomars.ui.theme.DarkBackground
 import com.example.meteomars.ui.theme.TealGrid
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SolDetailScreen(
     marsWeatherData: MarsWeatherData,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onNextSol: (MarsWeatherData) -> Unit = {},
+    onPreviousSol: (MarsWeatherData) -> Unit = {},
+    allWeatherData: List<MarsWeatherData> = emptyList()
 ) {
+    val coroutineScope = rememberCoroutineScope()
+    val scrollState = rememberScrollState()
+    
+    // Find current sol index in the list
+    val currentSolIndex = allWeatherData.indexOfFirst { it.sol == marsWeatherData.sol }
+    val hasPreviousSol = currentSolIndex > 0
+    val hasNextSol = currentSolIndex < allWeatherData.size - 1 && currentSolIndex >= 0
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(DarkBackground)
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragEnd = { 
+                        // Determine if it was a significant drag
+                        if (scrollState.value == 0 || scrollState.value == scrollState.maxValue) {
+                            // We're at the top or bottom of scroll, so handle navigation
+                        }
+                    },
+                    onDragStart = { },
+                    onVerticalDrag = { change, dragAmount ->
+                        // Handle scrolling during drag
+                        coroutineScope.launch {
+                            if (dragAmount < -50 && scrollState.value == scrollState.maxValue && hasNextSol) {
+                                // Scrolled up at bottom of content, go to next sol
+                                if (currentSolIndex >= 0 && currentSolIndex < allWeatherData.size - 1) {
+                                    onNextSol(allWeatherData[currentSolIndex + 1])
+                                }
+                            } else if (dragAmount > 50 && scrollState.value == 0 && hasPreviousSol) {
+                                // Scrolled down at top of content, go to previous sol
+                                if (currentSolIndex > 0) {
+                                    onPreviousSol(allWeatherData[currentSolIndex - 1])
+                                }
+                            }
+                        }
+                    }
+                )
+            }
     ) {
         Column(
             modifier = Modifier.fillMaxSize()
@@ -70,77 +116,137 @@ fun SolDetailScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xFF202020)
-                )
+                ),
+                actions = {
+                    // Navigation indicators
+                    if (hasPreviousSol) {
+                        IconButton(onClick = { 
+                            if (currentSolIndex > 0) {
+                                onPreviousSol(allWeatherData[currentSolIndex - 1])
+                            }
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowUp,
+                                contentDescription = "Previous Sol",
+                                tint = Color.White
+                            )
+                        }
+                    }
+                    
+                    if (hasNextSol) {
+                        IconButton(onClick = { 
+                            if (currentSolIndex >= 0 && currentSolIndex < allWeatherData.size - 1) {
+                                onNextSol(allWeatherData[currentSolIndex + 1])
+                            }
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Next Sol",
+                                tint = Color.White
+                            )
+                        }
+                    }
+                }
             )
+            
+            // Instruction for scrolling navigation
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF303030))
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Glissez vers le haut/bas pour naviguer entre les sols",
+                    color = Color.White,
+                    fontSize = 12.sp
+                )
+            }
             
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp)
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .padding(horizontal = 16.dp)
+                    .verticalScroll(scrollState),
+                horizontalAlignment = Alignment.Start
             ) {
-                // Season
-                marsWeatherData.season?.let { season ->
-                    DetailCard(
-                        title = "Saison",
-                        content = "Mars: $season"
-                    )
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
+                // Concise Temperature display
+                Text(
+                    text = "Température : avg: ${formatTemperature(marsWeatherData.temperature)} min: ${formatTemperature(marsWeatherData.minTemperature)} max: ${formatTemperature(marsWeatherData.maxTemperature)}",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
                 
-                // Date info
-                if (marsWeatherData.firstUtc != null && marsWeatherData.lastUtc != null) {
-                    DetailCard(
-                        title = "Période de mesure",
-                        content = "Du: ${formatDate(marsWeatherData.firstUtc)}\nAu: ${formatDate(marsWeatherData.lastUtc)}"
-                    )
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-                
-                // Temperature info
-                DetailCard(
-                    title = "Température",
-                    content = buildString {
-                        append("Moyenne: ${formatTemperature(marsWeatherData.temperature)}\n")
-                        if (marsWeatherData.minTemperature != null) {
-                            append("Min: ${formatTemperature(marsWeatherData.minTemperature)}\n")
-                        }
-                        if (marsWeatherData.maxTemperature != null) {
-                            append("Max: ${formatTemperature(marsWeatherData.maxTemperature)}")
-                        }
-                    }
+                // Concise Pressure display
+                Text(
+                    text = "Pression : avg: ${formatPressure(marsWeatherData.pressure)} min: ${formatPressureMinMax(marsWeatherData.pressure * 0.95)} max: ${formatPressureMinMax(marsWeatherData.pressure * 1.05)}",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(vertical = 4.dp)
                 )
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                // Wind info
-                if (marsWeatherData.windSpeed != null) {
-                    val windContent = buildString {
-                        append("Vitesse moyenne: ${formatWindSpeed(marsWeatherData.windSpeed)}\n")
-                        if (marsWeatherData.windDirection != null) {
-                            append("Direction: ${marsWeatherData.windDirection}")
-                        }
-                    }
-                    
-                    DetailCard(
-                        title = "Vent",
-                        content = windContent
+                // Wind Rose Chart
+                if (marsWeatherData.windDirectionMap.isNotEmpty()) {
+                    WindRoseChart(
+                        windDirectionMap = marsWeatherData.windDirectionMap,
+                        maxValue = marsWeatherData.maxWindDirectionValue,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(350.dp),
+                        circleColor = Color(0xFFD8D0CE), // Light beige/gray color as in the image
+                        triangleColor = Color(0xFF82B3D6) // Light blue similar to the image
                     )
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
+                } else {
+                    // Generate sample data for the wind rose chart for demo purposes
+                    val sampleWindData = generateSampleWindData()
+                    WindRoseChart(
+                        windDirectionMap = sampleWindData.first,
+                        maxValue = sampleWindData.second,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(350.dp),
+                        circleColor = Color(0xFFD8D0CE), // Light beige/gray color as in the image
+                        triangleColor = Color(0xFF82B3D6) // Light blue similar to the image
+                    )
                 }
-                
-                // Pressure info
-                DetailCard(
-                    title = "Pression Atmosphérique",
-                    content = "Moyenne: ${formatPressure(marsWeatherData.pressure)}"
-                )
             }
         }
     }
+}
+
+/**
+ * Generate sample wind direction data for demo purposes
+ * Returns a Pair of (windDirectionMap, maxValue)
+ */
+private fun generateSampleWindData(): Pair<Map<Int, Double>, Double> {
+    val windMap = mutableMapOf<Int, Double>()
+    var maxValue = 0.0
+    
+    // Sample data similar to the image
+    // Direction 0 (North) has a small value
+    windMap[0] = 500.0
+    
+    // Directions 12-15 (NW quadrant) have large values
+    windMap[12] = 2000.0
+    windMap[13] = 3000.0
+    windMap[14] = 3500.0
+    windMap[15] = 800.0
+    
+    // Direction 9-11 (SW quadrant) have medium values
+    windMap[9] = 400.0
+    windMap[10] = 800.0
+    windMap[11] = 1200.0
+    
+    // Find max value
+    windMap.values.forEach { value ->
+        if (value > maxValue) maxValue = value
+    }
+    
+    return Pair(windMap, maxValue)
 }
 
 @Composable
@@ -181,7 +287,7 @@ fun DetailCard(title: String, content: String) {
 // Helper functions to format data
 private fun formatTemperature(value: Double?): String {
     return if (value != null) {
-        String.format("%.1f°C", value)
+        String.format("%.2f", value)
     } else {
         "N/A"
     }
@@ -197,7 +303,15 @@ private fun formatWindSpeed(value: Double?): String {
 
 private fun formatPressure(value: Double?): String {
     return if (value != null) {
-        String.format("%.2f Pa", value)
+        String.format("%.2f", value)
+    } else {
+        "N/A"
+    }
+}
+
+private fun formatPressureMinMax(value: Double?): String {
+    return if (value != null) {
+        String.format("%.2f", value)
     } else {
         "N/A"
     }

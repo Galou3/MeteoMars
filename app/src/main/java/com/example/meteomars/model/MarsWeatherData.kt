@@ -10,5 +10,7 @@ data class MarsWeatherData(
     val windSpeed: Double? = null,
     val windDirection: String? = null,
     val minTemperature: Double? = null, 
-    val maxTemperature: Double? = null
+    val maxTemperature: Double? = null,
+    val windDirectionMap: Map<Int, Double> = emptyMap(), // Map of direction index to count/value
+    val maxWindDirectionValue: Double = 0.0 // Maximum value in the wind direction map
 ) 

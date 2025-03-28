@@ -1,5 +1,6 @@
 package com.example.meteomars
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -58,6 +59,7 @@ class MainActivity : ComponentActivity() {
 fun MainAppNavigation() {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Splash) }
     var selectedSolData by remember { mutableStateOf<MarsWeatherData?>(null) }
+    var allWeatherData by remember { mutableStateOf<List<MarsWeatherData>>(emptyList()) }
     
     when (val screen = currentScreen) {
         is Screen.Splash -> SplashScreen(onStartClick = { currentScreen = Screen.Home })
@@ -65,13 +67,23 @@ fun MainAppNavigation() {
             onSolSelected = { solData -> 
                 selectedSolData = solData
                 currentScreen = Screen.SolDetail 
+            },
+            onWeatherDataLoaded = { weatherDataList ->
+                allWeatherData = weatherDataList
             }
         )
         is Screen.SolDetail -> {
             selectedSolData?.let { solData ->
                 SolDetailScreen(
                     marsWeatherData = solData,
-                    onBackClick = { currentScreen = Screen.Home }
+                    onBackClick = { currentScreen = Screen.Home },
+                    onNextSol = { nextSolData ->
+                        selectedSolData = nextSolData
+                    },
+                    onPreviousSol = { prevSolData ->
+                        selectedSolData = prevSolData
+                    },
+                    allWeatherData = allWeatherData
                 )
             } ?: run {
                 // If no sol data, go back to home
@@ -89,6 +101,8 @@ sealed class Screen {
 
 @Composable
 fun SplashScreen(onStartClick: () -> Unit = {}) {
+    val context = LocalContext.current
+    
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -147,6 +161,49 @@ fun SplashScreen(onStartClick: () -> Unit = {}) {
             ) {
                 Text(
                     text = "COMMENCER",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // "VOIR L'HISTORIQUE" button (can be implemented later)
+            Button(
+                onClick = { /* History functionality to be implemented */ },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = HistoryButtonRed
+                ),
+                shape = RoundedCornerShape(4.dp),
+                modifier = Modifier
+                    .width(220.dp)
+                    .height(50.dp)
+            ) {
+                Text(
+                    text = "VOIR L'HISTORIQUE",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // "DIRIGER" button to open RobotControlActivity
+            Button(
+                onClick = { 
+                    val intent = Intent(context, RobotControlActivity::class.java)
+                    context.startActivity(intent)
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = HistoryButtonRed
+                ),
+                shape = RoundedCornerShape(4.dp),
+                modifier = Modifier
+                    .width(220.dp)
+                    .height(50.dp)
+            ) {
+                Text(
+                    text = "DIRIGER",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
                 )

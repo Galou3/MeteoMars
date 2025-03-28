@@ -49,7 +49,8 @@ import kotlinx.coroutines.withContext
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onSolSelected: (MarsWeatherData) -> Unit = {}
+    onSolSelected: (MarsWeatherData) -> Unit = {},
+    onWeatherDataLoaded: (List<MarsWeatherData>) -> Unit = {}
 ) {
     val context = LocalContext.current
     var isLoading by remember { mutableStateOf(true) }
@@ -67,6 +68,8 @@ fun HomeScreen(
                 withContext(Dispatchers.Main) {
                     weatherDataList = parsedData
                     isLoading = false
+                    // Notify data loaded
+                    onWeatherDataLoaded(parsedData)
                     // Show success toast
                     Toast.makeText(
                         context,

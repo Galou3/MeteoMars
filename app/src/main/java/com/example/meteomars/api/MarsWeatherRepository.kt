@@ -107,6 +107,8 @@ class MarsWeatherRepository {
         var windDirection: String? = null
         var minTemperature: Double? = null
         var maxTemperature: Double? = null
+        val windDirectionMap = mutableMapOf<Int, Double>()
+        var maxWindDirectionValue = 0.0
         
         // Get average temperature
         if (solData.has("AT")) {
@@ -129,10 +131,28 @@ class MarsWeatherRepository {
         }
         
         // Get wind direction
-        if (solData.has("WD") && solData.getJSONObject("WD").has("most_common")) {
+        if (solData.has("WD")) {
             val wdData = solData.getJSONObject("WD")
-            val mostCommon = wdData.getJSONObject("most_common")
-            windDirection = mostCommon.optString("compass_point", "N/A")
+            
+            // Get most common direction
+            if (wdData.has("most_common")) {
+                val mostCommon = wdData.getJSONObject("most_common")
+                windDirection = mostCommon.optString("compass_point", "N/A")
+            }
+            
+            // Extract all 16 wind directions
+            for (i in 0..15) {
+                if (wdData.has(i.toString())) {
+                    val directionData = wdData.getJSONObject(i.toString())
+                    val count = directionData.optDouble("ct", 0.0)
+                    windDirectionMap[i] = count
+                    
+                    // Update max value if needed
+                    if (count > maxWindDirectionValue) {
+                        maxWindDirectionValue = count
+                    }
+                }
+            }
         }
         
         return MarsWeatherData(
@@ -145,7 +165,9 @@ class MarsWeatherRepository {
             windSpeed = windSpeed,
             windDirection = windDirection,
             minTemperature = minTemperature,
-            maxTemperature = maxTemperature
+            maxTemperature = maxTemperature,
+            windDirectionMap = windDirectionMap,
+            maxWindDirectionValue = maxWindDirectionValue
         )
     }
     

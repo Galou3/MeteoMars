@@ -27,6 +27,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        
+        <activity
+            android:name=".RobotControlActivity"
+            android:exported="false"
+            android:label="Contrôle du robot"
+            android:theme="@style/Theme.MeteoMars">
+        </activity>
     </application>
 
 </manifest>
