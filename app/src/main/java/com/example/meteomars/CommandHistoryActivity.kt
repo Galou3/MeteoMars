@@ -34,29 +34,24 @@ import androidx.compose.ui.unit.sp
 import com.example.meteomars.ui.theme.DarkBackground
 import com.example.meteomars.ui.theme.MeteoMarsTheme
 
-// Objet singleton pour gérer l'historique des commandes
 object CommandHistoryManager {
     private const val PREFS_NAME = "robot_command_history"
     private const val KEY_HISTORY = "command_history"
     
-    // Ajouter une commande à l'historique
     fun addCommand(context: Context, command: String) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val history = getCommandHistory(context).toMutableList()
         history.add(command)
         
-        // Sauvegarder l'historique mis à jour
         prefs.edit().putString(KEY_HISTORY, history.joinToString(",")).apply()
     }
     
-    // Obtenir l'historique des commandes
     fun getCommandHistory(context: Context): List<String> {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val historyString = prefs.getString(KEY_HISTORY, "") ?: ""
         return if (historyString.isEmpty()) emptyList() else historyString.split(",")
     }
     
-    // Effacer l'historique des commandes
     fun clearHistory(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().remove(KEY_HISTORY).apply()
@@ -68,13 +63,8 @@ class CommandHistoryActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         
-        // Récupérer l'historique des commandes depuis les SharedPreferences
         val commandHistory = CommandHistoryManager.getCommandHistory(this)
-        
-        // Vérifier également si des données ont été passées par intent (pour la compatibilité)
         val extraCommandHistory = intent.getStringArrayExtra("COMMAND_HISTORY")?.toList() ?: emptyList()
-        
-        // Utiliser l'historique de l'intent s'il n'est pas vide, sinon utiliser celui des SharedPreferences
         val finalCommandHistory = if (extraCommandHistory.isNotEmpty()) extraCommandHistory else commandHistory
         
         setContent {
@@ -102,7 +92,6 @@ fun CommandHistoryScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Barre de navigation supérieure
             TopAppBar(
                 title = {
                     Text(
@@ -124,8 +113,6 @@ fun CommandHistoryScreen(
                     containerColor = Color(0xFF202020)
                 )
             )
-            
-            // Contenu principal avec défilement
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -149,7 +136,6 @@ fun CommandHistoryScreen(
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
                     
-                    // Afficher toutes les commandes
                     val displayHistory = commandHistory.reversed()
                     for ((index, command) in displayHistory.withIndex()) {
                         Card(
@@ -197,4 +183,4 @@ fun CommandHistoryScreen(
             }
         }
     }
-} 
+}

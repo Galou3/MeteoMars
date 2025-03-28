@@ -86,7 +86,6 @@ fun MainAppNavigation() {
                     allWeatherData = allWeatherData
                 )
             } ?: run {
-                // If no sol data, go back to home
                 currentScreen = Screen.Home
             }
         }
@@ -114,21 +113,18 @@ fun SplashScreen(onStartClick: () -> Unit = {}) {
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxSize()
         ) {
-            // Android icon with green grid background
             Box(
                 modifier = Modifier
                     .size(100.dp)
                     .clip(CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                // Grid background
                 Image(
                     painter = painterResource(id = R.drawable.grid_pattern),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize()
                 )
                 
-                // Android logo
                 Image(
                     painter = painterResource(id = R.drawable.ic_android_robot),
                     contentDescription = "Android Icon",
@@ -138,7 +134,6 @@ fun SplashScreen(onStartClick: () -> Unit = {}) {
             
             Spacer(modifier = Modifier.height(32.dp))
             
-            // "Quelle météo sur Mars ?" text
             Text(
                 text = "Quelle météo sur Mars ?",
                 color = Color.White,
@@ -148,7 +143,6 @@ fun SplashScreen(onStartClick: () -> Unit = {}) {
             
             Spacer(modifier = Modifier.height(100.dp))
             
-            // "COMMENCER" button
             Button(
                 onClick = onStartClick,
                 colors = ButtonDefaults.buttonColors(
@@ -168,12 +162,9 @@ fun SplashScreen(onStartClick: () -> Unit = {}) {
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            // "VOIR L'HISTORIQUE" button (can be implemented later)
             Button(
                 onClick = { 
-                    // Ouvrir l'activité d'historique directement
                     val intent = Intent(context, CommandHistoryActivity::class.java)
-                    // Nous n'avons pas accès à l'historique ici, mais l'activité traitera le cas d'un historique vide
                     context.startActivity(intent)
                 },
                 colors = ButtonDefaults.buttonColors(
@@ -193,7 +184,6 @@ fun SplashScreen(onStartClick: () -> Unit = {}) {
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            // "DIRIGER" button to open RobotControlActivity
             Button(
                 onClick = { 
                     val intent = Intent(context, RobotControlActivity::class.java)
