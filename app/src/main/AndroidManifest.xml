@@ -34,6 +34,12 @@
             android:label="Contrôle du robot"
             android:theme="@style/Theme.MeteoMars">
         </activity>
+
+        <activity
+            android:name=".CommandHistoryActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MeteoMars"
+            android:parentActivityName=".RobotControlActivity" />
     </application>
 
 </manifest>

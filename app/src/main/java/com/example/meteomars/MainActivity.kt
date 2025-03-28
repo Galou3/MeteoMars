@@ -170,7 +170,12 @@ fun SplashScreen(onStartClick: () -> Unit = {}) {
             
             // "VOIR L'HISTORIQUE" button (can be implemented later)
             Button(
-                onClick = { /* History functionality to be implemented */ },
+                onClick = { 
+                    // Ouvrir l'activité d'historique directement
+                    val intent = Intent(context, CommandHistoryActivity::class.java)
+                    // Nous n'avons pas accès à l'historique ici, mais l'activité traitera le cas d'un historique vide
+                    context.startActivity(intent)
+                },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = HistoryButtonRed
                 ),

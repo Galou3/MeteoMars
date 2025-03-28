@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -58,6 +60,9 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.PrintWriter
 import java.net.Socket
+import androidx.compose.material3.AlertDialog
+import android.content.Intent
+import com.example.meteomars.CommandHistoryManager
 
 class RobotControlActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -83,6 +88,9 @@ fun RobotControlScreen(onBackClick: () -> Unit) {
     // Pour les tests - simuler une connexion réussie au serveur
     var isSimulationMode by remember { mutableStateOf(false) }
     var commandHistory by remember { mutableStateOf<List<String>>(emptyList()) }
+    
+    // État pour l'affichage de l'historique
+    var showHistory by remember { mutableStateOf(false) }
     
     // Vérifier la connexion au démarrage
     LaunchedEffect(Unit) {
@@ -218,6 +226,12 @@ fun RobotControlScreen(onBackClick: () -> Unit) {
                                         !response.contains("ERROR", ignoreCase = true)) {
                                         motorsStarted = true
                                     }
+                                    // Ajouter à l'historique des commandes
+                                    commandHistory = commandHistory + "START"
+                                    // Ajouter également à l'historique global via le gestionnaire
+                                    CommandHistoryManager.addCommand(context, "START")
+                                    // Afficher dans le Toast pour déboggage
+                                    Toast.makeText(context, "Commande: START, Réponse: $response", Toast.LENGTH_SHORT).show()
                                     isLoading = false
                                 }
                             }
@@ -260,6 +274,12 @@ fun RobotControlScreen(onBackClick: () -> Unit) {
                                         !response.contains("ERROR", ignoreCase = true)) {
                                         motorsStarted = false
                                     }
+                                    // Ajouter à l'historique des commandes
+                                    commandHistory = commandHistory + "STOP"
+                                    // Ajouter également à l'historique global via le gestionnaire
+                                    CommandHistoryManager.addCommand(context, "STOP")
+                                    // Afficher dans le Toast pour déboggage
+                                    Toast.makeText(context, "Commande: STOP, Réponse: $response", Toast.LENGTH_SHORT).show()
                                     isLoading = false
                                 }
                             }
@@ -296,29 +316,34 @@ fun RobotControlScreen(onBackClick: () -> Unit) {
                     // Forward button
                     Button(
                         onClick = {
-                            if (motorsStarted) {
-                                isLoading = true
-                                if (isSimulationMode) {
-                                    // Simulation locale
-                                    CoroutineScope(Dispatchers.Main).launch {
-                                        delay(500) // Simuler un délai de réseau
-                                        lastResponse = "SUCCESS: Avance tout droit"
-                                        commandHistory = commandHistory + "DIRECT_FRONT"
-                                        isLoading = false
-                                    }
-                                } else {
-                                    sendCommand("DIRECT_FRONT", context) { response ->
-                                        lastResponse = response
-                                        // Déboguer la réponse pour voir ce qui est reçu
-                                        Toast.makeText(context, "Réponse: $response", Toast.LENGTH_SHORT).show()
-                                        isLoading = false
-                                    }
+                            isLoading = true
+                            if (isSimulationMode) {
+                                // Simulation locale
+                                CoroutineScope(Dispatchers.Main).launch {
+                                    delay(500) // Simuler un délai de réseau
+                                    lastResponse = "SUCCESS: Avance tout droit"
+                                    commandHistory = commandHistory + "DIRECT_FRONT"
+                                    isLoading = false
                                 }
                             } else {
-                                Toast.makeText(context, "Les moteurs doivent être démarrés", Toast.LENGTH_SHORT).show()
+                                // Envoyer la commande directement
+                                sendCommand("DIRECT_FRONT", context) { response ->
+                                    lastResponse = response
+                                    // Vérifier si les moteurs sont coupés dans la réponse
+                                    if (response.contains("MOTEURS SONT COUPES", ignoreCase = true)) {
+                                        motorsStarted = false
+                                    }
+                                    // Ajouter à l'historique des commandes
+                                    commandHistory = commandHistory + "DIRECT_FRONT"
+                                    // Ajouter également à l'historique global via le gestionnaire
+                                    CommandHistoryManager.addCommand(context, "DIRECT_FRONT")
+                                    // Afficher dans le Toast pour déboggage
+                                    Toast.makeText(context, "Commande: DIRECT_FRONT, Réponse: $response", Toast.LENGTH_SHORT).show()
+                                    isLoading = false
+                                }
                             }
                         },
-                        enabled = motorsStarted && !isLoading,
+                        enabled = !isLoading,
                         modifier = Modifier.size(width = 180.dp, height = 60.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF4CAF50),
@@ -339,29 +364,34 @@ fun RobotControlScreen(onBackClick: () -> Unit) {
                         // Left button
                         Button(
                             onClick = {
-                                if (motorsStarted) {
-                                    isLoading = true
-                                    if (isSimulationMode) {
-                                        // Simulation locale
-                                        CoroutineScope(Dispatchers.Main).launch {
-                                            delay(500) // Simuler un délai de réseau
-                                            lastResponse = "SUCCESS: Tourne à gauche"
-                                            commandHistory = commandHistory + "DIRECT_LEFT"
-                                            isLoading = false
-                                        }
-                                    } else {
-                                        sendCommand("DIRECT_LEFT", context) { response ->
-                                            lastResponse = response
-                                            // Déboguer la réponse pour voir ce qui est reçu
-                                            Toast.makeText(context, "Réponse: $response", Toast.LENGTH_SHORT).show()
-                                            isLoading = false
-                                        }
+                                isLoading = true
+                                if (isSimulationMode) {
+                                    // Simulation locale
+                                    CoroutineScope(Dispatchers.Main).launch {
+                                        delay(500) // Simuler un délai de réseau
+                                        lastResponse = "SUCCESS: Tourne à gauche"
+                                        commandHistory = commandHistory + "DIRECT_LEFT"
+                                        isLoading = false
                                     }
                                 } else {
-                                    Toast.makeText(context, "Les moteurs doivent être démarrés", Toast.LENGTH_SHORT).show()
+                                    // Envoyer la commande directement
+                                    sendCommand("DIRECT_LEFT", context) { response ->
+                                        lastResponse = response
+                                        // Vérifier si les moteurs sont coupés dans la réponse
+                                        if (response.contains("MOTEURS SONT COUPES", ignoreCase = true)) {
+                                            motorsStarted = false
+                                        }
+                                        // Ajouter à l'historique des commandes
+                                        commandHistory = commandHistory + "DIRECT_LEFT"
+                                        // Ajouter également à l'historique global via le gestionnaire
+                                        CommandHistoryManager.addCommand(context, "DIRECT_LEFT")
+                                        // Afficher dans le Toast pour déboggage
+                                        Toast.makeText(context, "Commande: DIRECT_LEFT, Réponse: $response", Toast.LENGTH_SHORT).show()
+                                        isLoading = false
+                                    }
                                 }
                             },
-                            enabled = motorsStarted && !isLoading,
+                            enabled = !isLoading,
                             modifier = Modifier.size(width = 80.dp, height = 80.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color(0xFF2196F3),
@@ -378,29 +408,34 @@ fun RobotControlScreen(onBackClick: () -> Unit) {
                         // Right button
                         Button(
                             onClick = {
-                                if (motorsStarted) {
-                                    isLoading = true
-                                    if (isSimulationMode) {
-                                        // Simulation locale
-                                        CoroutineScope(Dispatchers.Main).launch {
-                                            delay(500) // Simuler un délai de réseau
-                                            lastResponse = "SUCCESS: Tourne à droite"
-                                            commandHistory = commandHistory + "DIRECT_RIGHT"
-                                            isLoading = false
-                                        }
-                                    } else {
-                                        sendCommand("DIRECT_RIGHT", context) { response ->
-                                            lastResponse = response
-                                            // Déboguer la réponse pour voir ce qui est reçu  
-                                            Toast.makeText(context, "Réponse: $response", Toast.LENGTH_SHORT).show()
-                                            isLoading = false
-                                        }
+                                isLoading = true
+                                if (isSimulationMode) {
+                                    // Simulation locale
+                                    CoroutineScope(Dispatchers.Main).launch {
+                                        delay(500) // Simuler un délai de réseau
+                                        lastResponse = "SUCCESS: Tourne à droite"
+                                        commandHistory = commandHistory + "DIRECT_RIGHT"
+                                        isLoading = false
                                     }
                                 } else {
-                                    Toast.makeText(context, "Les moteurs doivent être démarrés", Toast.LENGTH_SHORT).show()
+                                    // Envoyer la commande directement
+                                    sendCommand("DIRECT_RIGHT", context) { response ->
+                                        lastResponse = response
+                                        // Vérifier si les moteurs sont coupés dans la réponse
+                                        if (response.contains("MOTEURS SONT COUPES", ignoreCase = true)) {
+                                            motorsStarted = false
+                                        }
+                                        // Ajouter à l'historique des commandes
+                                        commandHistory = commandHistory + "DIRECT_RIGHT"
+                                        // Ajouter également à l'historique global via le gestionnaire
+                                        CommandHistoryManager.addCommand(context, "DIRECT_RIGHT")
+                                        // Afficher dans le Toast pour déboggage
+                                        Toast.makeText(context, "Commande: DIRECT_RIGHT, Réponse: $response", Toast.LENGTH_SHORT).show()
+                                        isLoading = false
+                                    }
                                 }
                             },
-                            enabled = motorsStarted && !isLoading,
+                            enabled = !isLoading,
                             modifier = Modifier.size(width = 80.dp, height = 80.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color(0xFF2196F3),
@@ -433,6 +468,23 @@ fun RobotControlScreen(onBackClick: () -> Unit) {
                             fontSize = 14.sp
                         )
                     }
+                }
+                
+                // Bouton pour voir l'historique
+                Button(
+                    onClick = { 
+                        // Lancer l'activité d'historique
+                        val intent = Intent(context, CommandHistoryActivity::class.java)
+                        intent.putExtra("COMMAND_HISTORY", commandHistory.toTypedArray())
+                        context.startActivity(intent)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF673AB7),
+                        disabledContainerColor = Color.Gray
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("VOIR L'HISTORIQUE (${commandHistory.size})")
                 }
             }
         }
@@ -516,6 +568,7 @@ private fun sendCommand(command: String, context: android.content.Context, callb
             
             // Update UI on main thread
             CoroutineScope(Dispatchers.Main).launch {
+                // Nous ne gérons plus l'état motorsStarted ici - il sera géré par le Composable
                 callback(response)
             }
             
@@ -533,6 +586,7 @@ private fun sendCommand(command: String, context: android.content.Context, callb
                 val response = input.readLine() ?: "No response"
                 
                 CoroutineScope(Dispatchers.Main).launch {
+                    // Nous ne gérons plus l'état motorsStarted ici - il sera géré par le Composable
                     callback(response)
                 }
                 
